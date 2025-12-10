@@ -1,0 +1,64 @@
+---
+- name: Provisionamento Condicional para server-l4s
+  hosts: server-l4s
+  become: yes
+  tasks:
+    - name: 1. Verificar se o módulo 'tcp_prague' está carregado
+      shell: lsmod | grep tcp_prague
+      register: prague_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: 2. Instalar 'unzip' e 'wget' se o módulo não estiver carregado
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop:
+        - unzip
+        - wget
+      when: prague_check.rc != 0
+
+    - name: 3. Baixar o arquivo zipado da equipe do l4sTEAM
+      get_url:
+        url: 'https://github.com/L4STeam/linux/releases/download/testing-build/l4s-testing.zip'
+        dest: /tmp/l4s-testing.zip
+        mode: '0644'
+        timeout: 600
+      when: prague_check.rc != 0
+
+    - name: 4. Descompactar o arquivo
+      unarchive:
+        src: /tmp/l4s-testing.zip
+        dest: /tmp/
+        remote_src: yes
+      when: prague_check.rc != 0
+
+    - name: 5. Instalar especificações L4S (pacotes debian)
+      shell: dpkg --install debian_build/*
+      args:
+        chdir: /tmp/
+      when: prague_check.rc != 0
+
+    - name: 6. Atualizar grub
+      command: update-grub
+      when: prague_check.rc != 0
+
+    - name: 7. Adicionar módulo ao auto-load do sistema
+      lineinfile:
+        path: /etc/modules
+        line: tcp_prague
+        state: present
+      when: prague_check.rc != 0
+
+    - name: 8. Reiniciar a máquina (Workaround para Ansible Local)
+      shell: "sleep 5 && shutdown -r now 'Rebooting for new kernel'"
+      async: 1
+      poll: 0
+      ignore_errors: true
+      when: prague_check.rc != 0
+
+    - name: 9. Informar que o módulo já estava carregado (se aplicável)
+      debug:
+        msg: "Módulo 'tcp_prague' já estava carregado. Nenhuma ação de instalação foi necessária."
+      when: prague_check.rc == 0
