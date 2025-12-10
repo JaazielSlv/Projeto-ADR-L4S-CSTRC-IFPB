@@ -29,9 +29,12 @@ graph LR
         R{"Router Central<br/>AQM DualPI2"} 
     end
 
-    subgraph "Zona de Servidores (Destino)"
+    subgraph "Zona de Servidores"
+    
         direction TB
+        
         R -- "enp0s16<br/>Limit: 100Mbit" --> S_L4S("Server L4S<br/>192.168.57.10")
+        
         R -- "enp0s16" --> S_Leg("Server Classic<br/>192.168.57.20")
     end
 ```
