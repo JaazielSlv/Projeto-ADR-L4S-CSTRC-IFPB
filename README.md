@@ -16,7 +16,32 @@ O ambiente é orquestrado via **Vagrant** com 6 Máquinas Virtuais Ubuntu Focal,
 
 **Definição das Redes e Interfaces:**
 
+<<<<<<< HEAD
 ![Topologia da Rede](docs/template%20topology.png)
+=======
+```mermaid
+graph LR
+    subgraph "Zona de Clientes (Origem)"
+        direction TB
+        C_L4S("Client L4S<br/>(TCP Prague)<br/>192.168.56.10") -- "enp0s10" --> R
+        C_Leg("Classic Client<br/>(TCP Cubic)<br/>192.168.55.10") -- "enp0s9" --> R
+        C_Mal("Malicious Client<br/>(UDP Fake L4S)<br/>192.168.54.10") -- "enp0s8" --> R
+    end
+
+    subgraph "Núcleo de Rede (Gargalo)"
+        R{"Router Central<br/>AQM DualPI2"} 
+    end
+
+    subgraph "Zona de Servidores"
+    
+        direction TB
+        
+        R -- "enp0s16<br/>Limit: 100Mbit" --> S_L4S("Server L4S<br/>192.168.57.10")
+        
+        R -- "enp0s16" --> S_Leg("Server Classic<br/>192.168.57.20")
+    end
+```
+>>>>>>> 473c9e5d9b64f6ec4fb0a6d5ee561a83117aa255
 
 ### Componentes e Configurações:
 
