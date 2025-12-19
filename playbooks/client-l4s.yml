@@ -1,4 +1,12 @@
 ---
+################################################################################
+# Playbook Ansible: Configuração do Cliente L4S
+################################################################################
+# Este playbook instala o kernel customizado L4S (tcp_prague) na VM client-l4s.
+# Ele verifica se o módulo já está carregado e, se não, baixa e instala
+# os pacotes necessários do repositório L4STeam.
+################################################################################
+
 - name: Provisionamento Condicional para client-l4s
   hosts: client-l4s
   become: yes

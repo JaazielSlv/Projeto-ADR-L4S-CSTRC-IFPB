@@ -34,8 +34,9 @@ O ambiente é orquestrado via **Vagrant** com 6 Máquinas Virtuais Ubuntu Focal,
     * Gera tráfego legado (TCP Cubic) para preencher a fila clássica e validar o isolamento.
 
 4.  **Malicious Client (Atacante):**
-    * Usa `iptables` para forçar a marca `ECT(1)` (`TOS 0x01/0x03`) em pacotes UDP.
-    * **Comportamento:** Não implementa redução de taxa (Non-Responsive), ignorando sinais de congestionamento.
+    *   Usa `iperf3` em modo TCP (Cubic) para gerar tráfego de alta taxa.
+    *   Marca pacotes com `ECT(1)` via flag `--tos 1`.
+    * **Comportamento:** Entra na fila L4S (ECT1) usando TCP Cubic. Como o Cubic não responde aos sinais L4S (CE) com a mesma agressividade do Prague, ele causa instabilidade e latência para os usuários legítimos.
 
 ---
 
@@ -43,14 +44,14 @@ O ambiente é orquestrado via **Vagrant** com 6 Máquinas Virtuais Ubuntu Focal,
 
 Cada sessão de experimento para geração do dataset segue um cronograma rigoroso de **200 segundos**, com extração de métricas a cada **1.0 segundo**.
 
-### Cronograma de Injeção de Tráfego
+### Cronograma de Injeção de Tráfego (Estendido)
 
 | Tempo (s) | Fase | Ação | Label Esperado |
 | :--- | :--- | :--- | :--- |
-| **00 - 10** | **Baseline** | Início da captura. Rede ociosa. | `0` (Benigno) |
-| **10 - 40** | **Tráfego Legítimo** | `Client L4S` (Prague) e `Classic Client` (Cubic) iniciam transmissão simultânea. | `0` (Benigno) |
-| **40 - 140** | **Ataque** | `Malicious Client` inicia inundação UDP (ECT1) contra o Server L4S. | `1` (Malicioso) |
-| **140 - 200** | **Recuperação** | Ataque cessa. Observação da drenagem da fila e estabilização. | `0` (Benigno) |
+| **00 - 60** | **Baseline** | Início da captura. Rede ociosa. | `0` (Benigno) |
+| **60 - 120** | **Tráfego Legítimo** | `Client L4S` e `Classic Client` iniciam transmissão. | `0` (Benigno) |
+| **120 - 1920** | **Ataque (30 min)** | `Malicious Client` inicia inundação TCP (ECT1). | `1` (Malicioso) |
+| **1920 - 2000** | **Recuperação** | Ataque cessa. Observação da drenagem da fila. | `0` (Benigno) |
 
 ---
 
@@ -134,7 +135,8 @@ iperf3 -c 192.168.57.10 -t 200 -C prague
 ```bash
 # Terminal 5 (Ataque)
 vagrant ssh malicious-client
-sudo python3 ataque_udp.py
+# Envia UDP Flood (100Mbps) marcado com ECT(1) (--tos 1)
+iperf3 -c 192.168.57.10 -u -b 100M --tos 1 -t 60
 ```
 
 ### 4. Resultados

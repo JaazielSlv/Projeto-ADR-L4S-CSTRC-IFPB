@@ -1,4 +1,11 @@
 ---
+################################################################################
+# Playbook Ansible: Configuração do Servidor L4S
+################################################################################
+# Este playbook instala o kernel customizado L4S (tcp_prague) na VM server-l4s.
+# Permite que o servidor responda corretamente aos clientes L4S.
+################################################################################
+
 - name: Provisionamento Condicional para server-l4s
   hosts: server-l4s
   become: yes

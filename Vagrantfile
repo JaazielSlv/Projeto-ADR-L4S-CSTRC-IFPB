@@ -1,3 +1,18 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+################################################################################
+# Vagrantfile - Definição da Infraestrutura do Testbed L4S
+################################################################################
+# Este arquivo define 5 Máquinas Virtuais (VMs) para simular a topologia de rede:
+# 1. client-l4s: Cliente legítimo usando TCP Prague (L4S).
+# 2. classic-client: Cliente legado usando TCP Cubic/Reno.
+# 3. malicious-client: Atacante gerando tráfego UDP não-responsivo.
+# 4. router: Roteador central com AQM DualPI2 e gargalo de 100Mbps.
+# 5. server-l4s: Servidor de destino para os fluxos.
+# 6. classic-server: Servidor de destino para fluxos clássicos.
+################################################################################
+
 Vagrant.configure("2") do |config|
   # VM Cliente  (L4S)
   config.vm.define "client-l4s" do |client|
@@ -23,7 +38,9 @@ Vagrant.configure("2") do |config|
     end
     # Provisionamento Shell
     client.vm.provision "shell", inline: <<-SHELL
-      sudo ip route add default via 192.168.56.2
+      # Rota para alcançar a rede dos servidores (192.168.57.x) via Router
+      sudo ip route add 192.168.57.0/24 via 192.168.56.2 || true
+      
       sudo sysctl -w net.ipv4.tcp_ecn=3
       sudo sysctl -w net.ipv4.tcp_congestion_control=prague
       sudo ethtool -K enp0s8 tso off gso off gro off
@@ -42,7 +59,9 @@ Vagrant.configure("2") do |config|
       vb.name = "classic-client" 
     end
     classic_client.vm.provision "shell", inline: <<-SHELL
-      sudo ip route add default via 192.168.55.2
+      # Rota para alcançar a rede dos servidores (192.168.57.x) via Router
+      sudo ip route add 192.168.57.0/24 via 192.168.55.2 || true
+      
       sudo ip link set enp0s8 up
       sudo sysctl -w net.ipv4.tcp_ecn=0
     SHELL
@@ -61,10 +80,11 @@ Vagrant.configure("2") do |config|
     end
 
     malicious_client.vm.provision "shell", inline: <<-SHELL
-      sudo ip route add default via 192.168.54.2
+      # Rota para alcançar a rede dos servidores (192.168.57.x) via Router
+      sudo ip route add 192.168.57.0/24 via 192.168.54.2 || true
+      
       sudo ip link set enp0s8 up
       sudo sysctl -w net.ipv4.tcp_ecn=0
-      sudo iptables -t mangle -A POSTROUTING -j TOS --set-tos 0x01/0x03
     SHELL
   end
 
@@ -161,12 +181,21 @@ Vagrant.configure("2") do |config|
     end
 
     server.vm.provision "shell", inline: <<-SHELL
-      sudo ip route add default via 192.168.57.2
+      # Rotas de retorno para os clientes
+      sudo ip route add 192.168.56.0/24 via 192.168.57.2 || true # Client L4S
+      sudo ip route add 192.168.54.0/24 via 192.168.57.2 || true # Malicious Client
+      
       sudo ip link set enp0s8 up
       sudo sysctl -w net.ipv4.tcp_ecn=3
       sudo sysctl -w net.ipv4.tcp_congestion_control=prague
       sudo ethtool -K enp0s8 tso off gso off gro off
       sudo tc qdisc replace dev enp0s8 root handle 1: fq limit 20480 flow_limit 10240
+
+      # Inicia servidores iperf3 em background para receber tráfego
+      # Porta 5201: Tráfego Legítimo
+      # Porta 5202: Tráfego Malicioso (TCP)
+      nohup iperf3 -s -p 5201 > /dev/null 2>&1 &
+      nohup iperf3 -s -p 5202 > /dev/null 2>&1 &
     SHELL
   end
 
@@ -183,7 +212,9 @@ Vagrant.configure("2") do |config|
     end 
 
     classic_server.vm.provision "shell", inline: <<-SHELL
-      sudo ip route add default via 192.168.57.2
+      # Rota de retorno para o cliente clássico
+      sudo ip route add 192.168.55.0/24 via 192.168.57.2 || true
+      
       sudo ip link set enp0s8 up
     SHELL
   end

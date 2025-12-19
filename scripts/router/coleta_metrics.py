@@ -1,3 +1,14 @@
+################################################################################
+# Script de Coleta de Métricas L4S (Router)
+################################################################################
+# Este script roda no Roteador e captura tráfego em tempo real para gerar o Dataset.
+# Funcionalidades:
+# 1. Captura pacotes via TShark (Wireshark CLI).
+# 2. Extrai métricas de RTT, Throughput, Marcas ECN (CE/ECT1).
+# 3. Rotula os dados automaticamente (0=Benigno, 1=Malicioso) baseado no IP de origem.
+# 4. Salva os dados em 'dataset_l4s_attack.csv'.
+################################################################################
+
 import subprocess
 import time
 import pandas as pd
@@ -12,7 +23,7 @@ INTERFACE_WAN = "enp0s16"   # Interface de SAÍDA para os servidores (onde a fil
 INTERFACE_LAN = "enp0s10"   # Interface de onde vem o cliente legitimo (monitoramento passivo)
 ATTACKER_IP = "192.168.54.10" # IP do Atacante (Usado para ROTULAR o dado como Malicioso)
 WINDOW_SIZE = 1.0           # Janela de agregação em segundos
-OUTPUT_FILE = "dataset_l4s_attack.csv"
+OUTPUT_FILE = "/vagrant/dataset/dataset_l4s_final.csv" # Salva direto na pasta compartilhada
 
 # Variáveis Globais de Estado
 data_buffer = []

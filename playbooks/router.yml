@@ -1,4 +1,11 @@
 ---
+################################################################################
+# Playbook Ansible: Configuração do Roteador L4S
+################################################################################
+# Este playbook instala o kernel customizado L4S (sch_dualpi2) na VM router.
+# O módulo sch_dualpi2 é essencial para criar as filas acopladas (L4S/Classic).
+################################################################################
+
 - name: Provisionamento Condicional para router
   hosts: router
   become: yes
