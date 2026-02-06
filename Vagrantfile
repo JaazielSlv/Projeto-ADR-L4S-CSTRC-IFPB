@@ -132,7 +132,14 @@ Vagrant.configure("2") do |config|
       # Instalação com modo não-interativo forçado
       sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ansible iperf3 python3-pip tshark
       
-      sudo pip3 install pandas scikit-learn numpy psutil
+      # Corrige compatibilidade de versões (Python 3.8 em Ubuntu Focal)
+      sudo -H pip3 install --upgrade pip
+      sudo -H pip3 install \
+        numpy==1.24.4 \
+        pandas==1.5.3 \
+        scikit-learn==1.2.2 \
+        psutil==5.9.8 \
+        joblib==1.3.2
     SHELL
 
     
@@ -211,12 +218,20 @@ Vagrant.configure("2") do |config|
       vb.name = "classic-server"
     end 
 
+    # Instalação básica
     classic_server.vm.provision "shell", inline: <<-SHELL
+      sudo apt-get update
+      sudo apt-get install -y ansible iperf3
       # Rota de retorno para o cliente clássico
       sudo ip route add 192.168.55.0/24 via 192.168.57.2 || true
       
       sudo ip link set enp0s8 up
     SHELL
+
+    # Provisionamento Ansible para service iperf3
+    classic_server.vm.provision "ansible_local" do |ansible|
+      ansible.playbook = "playbooks/classic-server.yml"
+    end
   end
 end
 

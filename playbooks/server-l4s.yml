@@ -1,71 +1,111 @@
 ---
-################################################################################
-# Playbook Ansible: Configuração do Servidor L4S
-################################################################################
-# Este playbook instala o kernel customizado L4S (tcp_prague) na VM server-l4s.
-# Permite que o servidor responda corretamente aos clientes L4S.
-################################################################################
-
-- name: Provisionamento Condicional para server-l4s
-  hosts: server-l4s
+- name: Setup ambiente L4S / Prague
+  hosts: all
   become: yes
+
+  vars:
+    l4s_kernel_url: "https://github.com/L4STeam/linux/releases/download/testing-build/l4s-testing.zip"
+    l4s_tmp_dir: "/tmp/l4s"
+
   tasks:
-    - name: 1. Verificar se o módulo 'tcp_prague' está carregado
-      shell: lsmod | grep tcp_prague
-      register: prague_check
-      ignore_errors: yes
+
+    # -----------------------------------------------------
+    # 1. Atualização do sistema e pacotes base
+    # -----------------------------------------------------
+    - name: Atualizar cache do apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar pacotes base
+      apt:
+        name:
+          - iperf
+          - net-tools
+          - wget
+          - unzip
+          - ethtool
+          - iproute2
+        state: present
+
+    # -----------------------------------------------------
+    # 3. Verificação do kernel L4S (Prague)
+    # -----------------------------------------------------
+    - name: Verificar versão atual do kernel
+      command: uname -r
+      register: kernel_version
       changed_when: false
 
-    - name: 2. Instalar 'unzip' e 'wget' se o módulo não estiver carregado
-      apt:
-        name: "{{ item }}"
-        state: present
-        update_cache: yes
-      loop:
-        - unzip
-        - wget
-      when: prague_check.rc != 0
+    - name: Definir flag se kernel L4S está instalado
+      set_fact:
+        l4s_installed: "{{ 'prague' in kernel_version.stdout }}"
 
-    - name: 3. Baixar o arquivo zipado da equipe do l4sTEAM
+    # -----------------------------------------------------
+    # 4. Download e instalação do kernel L4S (se necessário)
+    # -----------------------------------------------------
+    - name: Criar diretório temporário
+      file:
+        path: "{{ l4s_tmp_dir }}"
+        state: directory
+      when: not l4s_installed
+
+    - name: Baixar kernel L4S
       get_url:
-        url: 'https://github.com/L4STeam/linux/releases/download/testing-build/l4s-testing.zip'
-        dest: /tmp/l4s-testing.zip
+        url: "{{ l4s_kernel_url }}"
+        dest: "{{ l4s_tmp_dir }}/l4s.zip"
         mode: '0644'
-        timeout: 600
-      when: prague_check.rc != 0
+      when: not l4s_installed
 
-    - name: 4. Descompactar o arquivo
+    - name: Descompactar kernel L4S
       unarchive:
-        src: /tmp/l4s-testing.zip
-        dest: /tmp/
+        src: "{{ l4s_tmp_dir }}/l4s.zip"
+        dest: "{{ l4s_tmp_dir }}"
         remote_src: yes
-      when: prague_check.rc != 0
+      when: not l4s_installed
 
-    - name: 5. Instalar especificações L4S (pacotes debian)
-      shell: dpkg --install debian_build/*
+    - name: Instalar pacotes do kernel L4S
+      shell: dpkg -i debian_build/*.deb
       args:
-        chdir: /tmp/
-      when: prague_check.rc != 0
+        chdir: "{{ l4s_tmp_dir }}"
+      when: not l4s_installed
 
-    - name: 6. Atualizar grub
+    - name: Atualizar GRUB
       command: update-grub
-      when: prague_check.rc != 0
+      when: not l4s_installed
 
-    - name: 7. Adicionar módulo ao auto-load do sistema
-      lineinfile:
-        path: /etc/modules
-        line: tcp_prague
-        state: present
-      when: prague_check.rc != 0
+    - name: Reiniciar máquina após instalação do kernel
+      reboot:
+        reboot_timeout: 600
+      when: not l4s_installed
 
-    - name: 8. Reiniciar a máquina (Workaround para Ansible Local)
-      shell: "sleep 5 && shutdown -r now 'Rebooting for new kernel'"
-      async: 1
-      poll: 0
-      ignore_errors: true
-      when: prague_check.rc != 0
+    # -----------------------------------------------------
+    # 5. Validação pós-instalação / carregamento
+    # -----------------------------------------------------
+    - name: Verificar novamente versão do kernel
+      command: uname -r
+      register: kernel_after_reboot
+      changed_when: false
 
-    - name: 9. Informar que o módulo já estava carregado (se aplicável)
+    - name: Garantir que congestion control Prague está disponível
+      command: sysctl -w net.ipv4.tcp_congestion_control=prague
+      ignore_errors: yes
+
+    - name: Habilitar ECN
+      command: sysctl -w net.ipv4.tcp_ecn=3
+
+    # -----------------------------------------------------
+    # 6. Configuração opcional de interface (ajuste conforme ambiente)
+    # -----------------------------------------------------
+    - name: Desativar offloads (TSO, GSO, GRO)
+      command: ethtool -K enp0s8 tso off gso off gro off
+      ignore_errors: yes
+
+    - name: Configurar FQ qdisc
+      command: tc qdisc replace dev enp0s8 root fq
+      ignore_errors: yes
+
+    # -----------------------------------------------------
+    # 7. Mensagem final
+    # -----------------------------------------------------
+    - name: Status final do kernel
       debug:
-        msg: "Módulo 'tcp_prague' já estava carregado. Nenhuma ação de instalação foi necessária."
-      when: prague_check.rc == 0
+        msg: "Kernel atual: {{ kernel_after_reboot.stdout }}"

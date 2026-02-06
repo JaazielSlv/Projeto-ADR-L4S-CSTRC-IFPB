@@ -20,7 +20,7 @@ import sys
 
 # --- CONFIGURAÇÕES ---
 INTERFACE_WAN = "enp0s16"
-MODEL_PATH = "/vagrant/scripts/ml/l4s_detection_model.pkl" # Caminho do modelo treinado
+MODEL_PATH = "/home/vagrant/l4s_detection_model.pkl" # Caminho do modelo treinado
 WINDOW_SIZE = 1.0
 
 # --- CARREGAR O CÉREBRO (MODELO TREINADO) ---

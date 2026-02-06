@@ -22,7 +22,7 @@ import os
 # --- CONFIGURAÇÕES ---
 # Garante que o caminho seja relativo ao local deste script
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(SCRIPT_DIR, '../../dataset/dataset_l4s_final.csv')
+DATASET_PATH = os.path.join(SCRIPT_DIR, '/home/aluno/Lucas_J/ADR/dataset/dataset_l4s_final.csv')
 MODEL_OUTPUT_PATH = os.path.join(SCRIPT_DIR, 'l4s_detection_model.pkl')
 
 def train_and_evaluate():

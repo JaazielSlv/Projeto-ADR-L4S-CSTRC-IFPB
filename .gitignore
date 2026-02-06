@@ -1,3 +1,8 @@
-.vagrant/
-plano_projeto.txt
-GUIA_IA_L4S.txt
+.vagrant
+.git
+./fluxo_benigno.pcap
+.gitignore
+plot_bandwidtch.py
+
+
+*.pcap

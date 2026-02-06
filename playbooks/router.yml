@@ -1,71 +1,109 @@
 ---
-################################################################################
-# Playbook Ansible: Configuração do Roteador L4S
-################################################################################
-# Este playbook instala o kernel customizado L4S (sch_dualpi2) na VM router.
-# O módulo sch_dualpi2 é essencial para criar as filas acopladas (L4S/Classic).
-################################################################################
-
-- name: Provisionamento Condicional para router
+- name: Provisionamento do Roteador L4S (dualpi2)
   hosts: router
   become: yes
+
+  vars:
+    l4s_kernel_url: "https://github.com/L4STeam/linux/releases/download/testing-build/l4s-testing.zip"
+    l4s_tmp_dir: "/tmp/l4s"
+
   tasks:
-    - name: 1. Verificar se o módulo 'sch_dualpi2' está carregado
+
+    # -----------------------------------------------------
+    # 1. Atualização do sistema e pacotes base
+    # -----------------------------------------------------
+    - name: Atualizar cache do apt
+      apt:
+        update_cache: yes
+
+    - name: Instalar pacotes base
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - iperf
+          - net-tools
+          - iproute2
+          - ethtool
+          - wget
+          - unzip
+        state: present
+
+    # -----------------------------------------------------
+    # 2. Instalação de bibliotecas Python via pip
+    # -----------------------------------------------------
+    - name: Instalar bibliotecas Python via pip
+      pip:
+        name:
+          - numpy
+          - pandas
+          - scapy
+        executable: pip3
+
+    # -----------------------------------------------------
+    # 3. Verificação do módulo sch_dualpi2
+    # -----------------------------------------------------
+    - name: Verificar se o módulo sch_dualpi2 está carregado
       shell: lsmod | grep sch_dualpi2
       register: dualpi2_check
       ignore_errors: yes
       changed_when: false
 
-    - name: 2. Instalar 'unzip' e 'wget' se o módulo não estiver carregado
-      apt:
-        name: "{{ item }}"
-        state: present
-        update_cache: yes
-      loop:
-        - unzip
-        - wget
+    # -----------------------------------------------------
+    # 4. Instalação do kernel L4S (somente se necessário)
+    # -----------------------------------------------------
+    - name: Criar diretório temporário
+      file:
+        path: "{{ l4s_tmp_dir }}"
+        state: directory
       when: dualpi2_check.rc != 0
 
-    - name: 3. Baixar o arquivo zipado da equipe do l4sTEAM
+    - name: Baixar kernel L4S
       get_url:
-        url: 'https://github.com/L4STeam/linux/releases/download/testing-build/l4s-testing.zip'
-        dest: /tmp/l4s-testing.zip
+        url: "{{ l4s_kernel_url }}"
+        dest: "{{ l4s_tmp_dir }}/l4s.zip"
         mode: '0644'
-        timeout: 600
       when: dualpi2_check.rc != 0
 
-    - name: 4. Descompactar o arquivo
+    - name: Descompactar kernel L4S
       unarchive:
-        src: /tmp/l4s-testing.zip
-        dest: /tmp/
+        src: "{{ l4s_tmp_dir }}/l4s.zip"
+        dest: "{{ l4s_tmp_dir }}"
         remote_src: yes
       when: dualpi2_check.rc != 0
 
-    - name: 5. Instalar especificações L4S (pacotes debian)
-      shell: dpkg --install debian_build/*
+    - name: Instalar pacotes do kernel L4S
+      shell: dpkg -i debian_build/*.deb
       args:
-        chdir: /tmp/
+        chdir: "{{ l4s_tmp_dir }}"
       when: dualpi2_check.rc != 0
 
-    - name: 6. Atualizar grub
+    - name: Atualizar GRUB
       command: update-grub
       when: dualpi2_check.rc != 0
 
-    - name: 7. Adicionar módulo ao auto-load do sistema
-      lineinfile:
-        path: /etc/modules
-        line: sch_dualpi2
-        state: present
+    - name: Reiniciar máquina para carregar novo kernel
+      reboot:
+        reboot_timeout: 600
       when: dualpi2_check.rc != 0
 
-    - name: 8. Reiniciar a máquina (Workaround para Ansible Local)
-      shell: "sleep 5 && shutdown -r now 'Rebooting for new kernel'"
-      async: 1
-      poll: 0
-      ignore_errors: true
-      when: dualpi2_check.rc != 0
+    # -----------------------------------------------------
+    # 5. Carregamento do módulo dualpi2
+    # -----------------------------------------------------
+    - name: Carregar módulo sch_dualpi2
+      command: modprobe sch_dualpi2
+      register: dualpi2_load
+      ignore_errors: yes
 
-    - name: 9. Informar que o módulo já estava carregado (se aplicável)
+    # -----------------------------------------------------
+    # 6. Mensagens de status
+    # -----------------------------------------------------
+    - name: Informar status do módulo dualpi2
       debug:
-        msg: "Módulo 'sch_dualpi2' já estava carregado. Nenhuma ação de instalação foi necessária."
-      when: dualpi2_check.rc == 0
+        msg: >-
+          {{
+            "Módulo sch_dualpi2 foi instalado e carregado."
+            if dualpi2_check.rc != 0
+            else
+            "Módulo sch_dualpi2 já estava carregado. Nenhuma ação necessária."
+          }}
